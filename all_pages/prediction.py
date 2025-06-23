@@ -4,8 +4,15 @@ import time
 import pandas as pd
 import streamlit as st
 import joblib
+import uuid
 
 def create_prediction_model():
+    # Generate a unique session identifier to ensure unique keys
+    if 'prediction_session_id' not in st.session_state:
+        st.session_state.prediction_session_id = str(uuid.uuid4())[:8]
+    
+    session_id = st.session_state.prediction_session_id
+    
     xgb_model = joblib.load('xgb_model.pkl')
 
     regional_mapping = {
@@ -101,6 +108,7 @@ def create_prediction_model():
         'Rice': 1,
         'Beans': 2,
     }      
+    
     st.markdown('<div style="background-color: #4CAF50; color: white; padding: 10px 0; box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.1); display: flex; align-items: center; justify-content: center;">', unsafe_allow_html=True)
     st.title('Crop Price Prediction')
     st.write("Welcome to the Mkulima consultation system. Enter your details and we'll predict the crop price for you!")
@@ -117,7 +125,11 @@ def create_prediction_model():
 
     st.subheader('Input Details')
 
-    selected_regional = st.selectbox('Select Regional', sorted(regional_mapping.keys()))
+    selected_regional = st.selectbox(
+        'Select Regional', 
+        sorted(regional_mapping.keys()),
+        key=f"pred_regional_select_{session_id}"
+    )
 
     region_to_districts = {
         'Arusha': ['Arusha Urban'],
@@ -171,18 +183,78 @@ def create_prediction_model():
         'Geita': ['Geita'],
     }
     
-    selected_district = st.selectbox('Select District', region_to_districts[selected_regional])
-    selected_market = st.selectbox('Select Market', region_to_markets[selected_regional])
+    selected_district = st.selectbox(
+        'Select District', 
+        region_to_districts[selected_regional],
+        key=f"pred_district_select_{selected_regional}_{session_id}"
+    )
+    
+    selected_market = st.selectbox(
+        'Select Market', 
+        region_to_markets[selected_regional],
+        key=f"pred_market_select_{selected_regional}_{session_id}"
+    )
 
-    commodity = st.selectbox('Select Commodity', sorted(commodity_mapping.keys()))
-    year = st.number_input('Enter Year', min_value=2025, max_value=2026, value=2025)
-    month = st.number_input('Enter Month', min_value=1, max_value=12, value=6)
+    commodity = st.selectbox(
+        'Select Commodity', 
+        sorted(commodity_mapping.keys()),
+        key=f"pred_commodity_select_{session_id}"
+    )
+    
+    year = st.number_input(
+        'Enter Year', 
+        min_value=2025, 
+        max_value=2026, 
+        value=2025,
+        key=f"pred_year_input_{session_id}"
+    )
+    
+    month = st.number_input(
+        'Enter Month', 
+        min_value=1, 
+        max_value=12, 
+        value=6,
+        key=f"pred_month_input_{session_id}"
+    )
 
-    predict_button = st.button('Predict', key='predict_button', help='Click to make a prediction')
+    # Add this RIGHT BEFORE your button definition
+    st.markdown("""
+    <style>
+        /* This will work with 100% certainty */
+        div.stButton > button:first-child {
+            background-color: #4CAF50 !important;
+            color: white !important;
+            font-weight: bold !important;
+            border: none !important;
+            padding: 10px 24px !important;
+            width: 100% !important;
+            border-radius: 4px !important;
+        }
+        
+        div.stButton > button:first-child:hover {
+            background-color: #45a049 !important;
+        }
+        
+        /* Nuclear option - targets ALL buttons */
+        button[kind="secondary"] {
+            background-color: #4CAF50 !important;
+            color: white !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Then your button code with unique key:
+    predict_button = st.button(
+        'Predict', 
+        key=f'pred_predict_button_{session_id}',
+        help='Click to make a prediction'
+    )
 
     st.subheader('Prediction Result')
-
-    st.markdown("**Disclaimer**: The prediction is for informational purposes only and may not reflect real-world prices accurately.")
+    st.markdown("""
+        <div style='color: #F44336; font-weight: bold; display: inline;'>Disclaimer</div>: 
+        <span style='color: inherit;'>The prediction is for informational purposes only and may not reflect real-world prices accurately.</span>
+    """, unsafe_allow_html=True)
 
     def predict_crop_price(regional, district, market, commodity, year, month):
         regional = regional_mapping[regional]
@@ -202,7 +274,6 @@ def create_prediction_model():
         time.sleep(2)
 
         prediction = xgb_model.predict(input_data)[0]
-
         formatted_prediction = '{:,.2f} TZS'.format(prediction)
 
         return formatted_prediction
@@ -211,27 +282,25 @@ def create_prediction_model():
         with st.spinner('Predicting...'):
             formatted_prediction = predict_crop_price(selected_regional, selected_district, selected_market, commodity, year, month)
             st.success('Prediction complete')
-            st.write(f'Predicted Price: {formatted_prediction}')
-            st.write("NOTE: Prediction is for 100kg, typically considered as a wholesale quantity.")
-            st.write("Prices for 1kg may vary and are often different, especially in retail markets.")
+            st.markdown(f'<p style="color: #2196F3; font-size: 18px; font-weight: bold;">Predicted Price: {formatted_prediction}</p>', unsafe_allow_html=True)
+            st.markdown("""
+                <div style='color: #F44336; font-weight: bold; display: inline;'>NOTE</div>: 
+                <span style='color: inherit;'>Prediction is for 100kg, typically considered as a wholesale quantity.</span>
+                <br>
+                <span style='color: inherit;'>Prices for 1kg may vary and are often different, especially in retail markets.</span>
+            """, unsafe_allow_html=True)
 
-    col1, col2 = st.columns(2)
+    # Centered contact information
+    st.markdown("""
+        <div style='text-align: center;'>
+            <hr style='border: 1px solid #e1e4e8; margin: 20px 0;'>
+            <h3>Mkulima Consultation System</h3>
+            <p>Address Line: P. O. Box 34675, DSM</p>
+            <p>Email Address: mkulimaconsaltation@gmail.com</p>
+            <p>Phone Number: +225 672 410 645 / +255 712 410 690</p>
+        </div>
+    """, unsafe_allow_html=True)
 
-    with col1:
-        st.markdown('---')
-        st.write("Mkulima Consultation System")
-        st.write("Address Line: P. O. Box 34675, DSM")
-        st.write("Email Address: mkulimaconsaltation@gmail.com")
-        st.write("Phone Number: +225 672 410 645 / +255 712 410 690")
-
-    with col2:
-        st.markdown('---')
-        st.markdown("### Development Team")
-        st.write("Meet the talented individuals who made this app possible:")
-        st.write("- Adili I. Said, Email: adilikitula@gmail.com")
-        st.write("- Arafati Chilamba, Email: arafatichilamba@gmail.com")
-        st.write("- Alnayan Tumwesige, Email: alnayaa255@gmail.com")
-        st.write("- Keffa Daniel, Email: keffaamlima254@gmail.com")
-        st.write("We appreciate their dedication and creativity in making this app extraordinary!")
-        
-create_prediction_model()
+# Only call this if the script is run directly, not when imported
+if __name__ == "__main__":
+    create_prediction_model()
