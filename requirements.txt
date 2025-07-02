@@ -3,7 +3,7 @@ matplotlib
 numpy
 pandas
 Pillow
-plotly
+plotly==6.2.0
 scikit-learn
 scipy
 streamlit
@@ -11,4 +11,4 @@ xgboost
 seaborn
 reportlab
 uuid
-kaleido
+kaleido==1.0.0
