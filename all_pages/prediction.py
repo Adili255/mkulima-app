@@ -20,6 +20,8 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 import io
 import base64
+import tempfile
+import os
 
 def create_prediction_model():
     # Load the dataset
@@ -939,19 +941,23 @@ def create_prediction_model():
                         for crop in report_crops:
                             story.append(Paragraph(f"{crop} Price Trends", styles['Heading3']))
                             
-                            # Add trend chart image
-                            trend_fig = create_trend_analysis_chart(filtered_data, crop)
-                            img_bytes = trend_fig.to_image(format="png")
-                            img = RLImage(io.BytesIO(img_bytes), width=6*inch, height=3*inch)
-                            story.append(img)
-                            story.append(Spacer(1, 12))
+                            # Create temporary file for trend chart
+                            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+                                trend_fig = create_trend_analysis_chart(filtered_data, crop)
+                                trend_fig.write_image(tmpfile.name)
+                                img = RLImage(tmpfile.name, width=6*inch, height=3*inch)
+                                story.append(img)
+                                story.append(Spacer(1, 12))
+                                os.unlink(tmpfile.name)  # Clean up
                             
-                            # Add market comparison chart
-                            market_fig = create_market_comparison_chart(filtered_data, crop)
-                            img_bytes = market_fig.to_image(format="png")
-                            img = RLImage(io.BytesIO(img_bytes), width=6*inch, height=3*inch)
-                            story.append(img)
-                            story.append(Spacer(1, 12))
+                            # Create temporary file for market comparison chart
+                            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+                                market_fig = create_market_comparison_chart(filtered_data, crop)
+                                market_fig.write_image(tmpfile.name)
+                                img = RLImage(tmpfile.name, width=6*inch, height=3*inch)
+                                story.append(img)
+                                story.append(Spacer(1, 12))
+                                os.unlink(tmpfile.name)  # Clean up
                         
                         story.append(PageBreak())
                         
@@ -959,32 +965,34 @@ def create_prediction_model():
                         story.append(Paragraph("3. Price Predictions", styles['Heading2']))
                         story.append(Spacer(1, 12))
                         
-                        # Add prediction chart
-                        fig_pred = go.Figure()
-                        for crop in report_crops:
-                            crop_predictions = prediction_data[prediction_data['crop'] == crop]
-                            avg_predictions = crop_predictions.groupby('date')['predicted_price'].mean().reset_index()
+                        # Create temporary file for prediction chart
+                        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+                            fig_pred = go.Figure()
+                            for crop in report_crops:
+                                crop_predictions = prediction_data[prediction_data['crop'] == crop]
+                                avg_predictions = crop_predictions.groupby('date')['predicted_price'].mean().reset_index()
+                                
+                                fig_pred.add_trace(go.Scatter(
+                                    x=avg_predictions['date'],
+                                    y=avg_predictions['predicted_price'],
+                                    mode='lines+markers',
+                                    name=f'{crop} Forecast',
+                                    line=dict(width=3)
+                                ))
                             
-                            fig_pred.add_trace(go.Scatter(
-                                x=avg_predictions['date'],
-                                y=avg_predictions['predicted_price'],
-                                mode='lines+markers',
-                                name=f'{crop} Forecast',
-                                line=dict(width=3)
-                            ))
-                        
-                        fig_pred.update_layout(
-                            title='Price Forecast - Next 5 Months (TSh)',
-                            xaxis_title='Date',
-                            yaxis_title='Predicted Price (TSh per 100kg)',
-                            template='plotly_white',
-                            height=500
-                        )
-                        
-                        img_bytes = fig_pred.to_image(format="png")
-                        img = RLImage(io.BytesIO(img_bytes), width=6*inch, height=4*inch)
-                        story.append(img)
-                        story.append(Spacer(1, 12))
+                            fig_pred.update_layout(
+                                title='Price Forecast - Next 5 Months (TSh)',
+                                xaxis_title='Date',
+                                yaxis_title='Predicted Price (TSh per 100kg)',
+                                template='plotly_white',
+                                height=500
+                            )
+                            
+                            fig_pred.write_image(tmpfile.name)
+                            img = RLImage(tmpfile.name, width=6*inch, height=4*inch)
+                            story.append(img)
+                            story.append(Spacer(1, 12))
+                            os.unlink(tmpfile.name)  # Clean up
                         
                         # Add prediction table
                         story.append(Paragraph("<b>Detailed Prediction Values:</b>", styles['Heading3']))
@@ -1022,20 +1030,30 @@ def create_prediction_model():
                         story.append(Spacer(1, 12))
                         
                         if not volatility_df.empty:
-                            # Add volatility chart
-                            fig_volatility = go.Figure()
-                            fig_volatility.add_trace(go.Bar(
-                                x=volatility_df['Market'],
-                                y=volatility_df['Average Volatility'],
-                                marker_color=['red' if level == 'High Volatility' else 
-                                             'orange' if level == 'Medium Volatility' else 
-                                             'green' for level in volatility_df['Volatility Level']]
-                            ))
-                            
-                            img_bytes = fig_volatility.to_image(format="png")
-                            img = RLImage(io.BytesIO(img_bytes), width=6*inch, height=4*inch)
-                            story.append(img)
-                            story.append(Spacer(1, 12))
+                            # Create temporary file for volatility chart
+                            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+                                fig_volatility = go.Figure()
+                                fig_volatility.add_trace(go.Bar(
+                                    x=volatility_df['Market'],
+                                    y=volatility_df['Average Volatility'],
+                                    marker_color=['red' if level == 'High Volatility' else 
+                                                 'orange' if level == 'Medium Volatility' else 
+                                                 'green' for level in volatility_df['Volatility Level']]
+                                ))
+                                
+                                fig_volatility.update_layout(
+                                    title='Market Volatility Comparison (Average Standard Deviation)',
+                                    xaxis_title='Market',
+                                    yaxis_title='Average Volatility (Standard Deviation)',
+                                    template='plotly_white',
+                                    height=400
+                                )
+                                
+                                fig_volatility.write_image(tmpfile.name)
+                                img = RLImage(tmpfile.name, width=6*inch, height=4*inch)
+                                story.append(img)
+                                story.append(Spacer(1, 12))
+                                os.unlink(tmpfile.name)  # Clean up
                             
                             # Add volatility table
                             story.append(Paragraph("<b>Market Volatility Rankings:</b>", styles['Heading3']))
